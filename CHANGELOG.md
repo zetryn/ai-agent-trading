@@ -5,6 +5,51 @@ All notable changes to `zetryn-trading` will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] — 2026-06-24
+
+Pre-P1 foundations: deployments can now ship their own playbook, fan out across
+multiple LLM providers with per-model throttle, and re-use past trade outcomes
+to make future decisions loss-aware.
+
+### Added
+- **`KnowledgePack`** (`zetryn.knowledge`) — markdown + JSON playbook loader.
+  `KnowledgePack.from_dir(path)` reads `<pack>/system/*.md` as system-prompt
+  blocks (filename order) and `<pack>/data/*.json` as structured lookups via
+  `lookup(ns, key, default)`. Surfaces: `system_blocks()`,
+  `as_system_message()`, `namespaces()`.
+- **`LLMRouter`** (`zetryn.llm.router`) — multi-provider failover satisfying the
+  `LLMClient` protocol; drops into existing `LLMNode` unchanged. Per-entry
+  `RateLimit` enforced via sliding-window RPM/RPD/TPM/TPD counters.
+  `PROVIDER_FREE_TIER_LIMITS` ships per-model presets for Groq (8 models),
+  Gemini (5 models), and OpenRouter's `:free` shared bucket.
+  `get_free_tier_limit(provider, model)` helper handles lookup safely.
+- **`ReflectiveNode`** (`zetryn.memory.reflective`) — rule-based loss-pattern
+  extractor over `DecisionLog`. Numeric features bucketed by quartile,
+  categorical by value; writes `ReflectionResult` + ready-to-inject
+  `lessons_text` to `state.scratch`. Pure `reflect()` helper exposed for direct
+  use outside graphs.
+- **Scanner + Sniper integration** — `build_scanner(..., knowledge_pack=pack)`
+  and `build_sniper(..., knowledge_pack=pack)` prepend the pack's system blocks
+  to the analyst, snipe-decide, and hybrid_audit prompts. Factories
+  `make_analyst_prompt(pack)` and `make_snipe_prompt(pack)` exposed for custom
+  graphs.
+- **Example** `examples/run_with_knowledge.py` — runs the scanner with a
+  throwaway pack, confirms house rules reach the LLM prompt.
+- **`docs/CAPABILITIES.md`** — capability matrix and gap analysis, tracks
+  F1–F3 foundation status.
+
+### Changed
+- `RateLimit` now has a `tpd` field (tokens-per-day), populated for Groq
+  presets. Existing callers are unaffected — the default is `None`.
+- README: architecture tree now lists `knowledge/`, `LLMRouter`, and
+  `ReflectiveNode`; Phase 1 section mentions multi-provider failover; What's
+  built includes the pre-P1 foundations row.
+
+### Notes
+- All three foundations are additive and backwards-compatible. Existing code
+  paths (`build_scanner(llm)` without a pack, single-provider `OpenAICompatibleClient`)
+  behave exactly as in 0.1.0.
+
 ## [0.1.0] — 2026-06-24
 
 First public release. AI-first agent framework for Solana memecoin trading.

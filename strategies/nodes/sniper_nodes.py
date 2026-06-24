@@ -9,11 +9,13 @@ instantly, LLM verifies asynchronously without blocking the trading hot path).
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 
 from pydantic import BaseModel, Field
 
 from trading.schemas import AuditVerdict, Decision
 from zetryn.core import Command, State
+from zetryn.knowledge import KnowledgePack
 from zetryn.llm import LLMClient, Message, system, user
 from zetryn.llm.structured import structured_complete
 
@@ -101,6 +103,22 @@ def snipe_prompt(state: State) -> list[Message]:
             f"KOL5m={t.social.kol_count_5m}"
         ),
     ]
+
+
+def make_snipe_prompt(
+    pack: KnowledgePack | None = None,
+) -> Callable[[State], list[Message]]:
+    """Return a snipe prompt builder that prepends a knowledge pack's blocks."""
+    if pack is None:
+        return snipe_prompt
+    pack_blocks = pack.system_blocks()
+    if not pack_blocks:
+        return snipe_prompt
+
+    def fn(state: State) -> list[Message]:
+        return pack_blocks + snipe_prompt(state)
+
+    return fn
 
 
 def snipe_result(model: SnipeDecision, state: State) -> Decision:
@@ -195,7 +213,12 @@ async def _run_audit(
         )
 
 
-def make_audit_dispatch(client: LLMClient, *, model: str | None = None):
+def make_audit_dispatch(
+    client: LLMClient,
+    *,
+    model: str | None = None,
+    knowledge_pack: KnowledgePack | None = None,
+):
     """Build a node function that dispatches the audit task and returns immediately.
 
     The decision is already in ``state.output`` (set by ``rule_size_and_buy``).
@@ -206,7 +229,13 @@ def make_audit_dispatch(client: LLMClient, *, model: str | None = None):
     The task handle is stored in ``state.scratch["audit_task"]``. Calling code
     may also use ``state.scratch["audit_result"]`` if it prefers to await on the
     task and read the parsed verdict.
+
+    When ``knowledge_pack`` is given, its system blocks are prepended to the
+    audit prompt so the auditor sees the deployment-specific playbook.
     """
+    pack_blocks: list[Message] = (
+        knowledge_pack.system_blocks() if knowledge_pack is not None else []
+    )
 
     def audit_dispatch(state: State) -> None:
         # Only audit actual entries — skip / abort decisions are not interesting.
@@ -214,7 +243,7 @@ def make_audit_dispatch(client: LLMClient, *, model: str | None = None):
             state.scratch["audit_skipped"] = True
             return
 
-        messages = _audit_prompt(state)
+        messages = pack_blocks + _audit_prompt(state) if pack_blocks else _audit_prompt(state)
         task = asyncio.create_task(_run_audit(client, messages, model))
         state.scratch["audit_task"] = task
         # Mark decision so observers know an audit is in flight.

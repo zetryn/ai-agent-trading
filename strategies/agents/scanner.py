@@ -22,18 +22,29 @@ from __future__ import annotations
 
 from trading.schemas import FullAnalysis
 from zetryn.core import END, Graph, RuleNode
+from zetryn.knowledge import KnowledgePack
 from zetryn.llm import LLMClient, LLMNode
 
 from ..nodes import decide, filters
-from ..nodes.analyst import analyst_prompt, neutral_analysis
+from ..nodes.analyst import make_analyst_prompt, neutral_analysis
 
 
-def build_scanner(llm_client: LLMClient | None = None, *, model: str | None = None) -> Graph:
+def build_scanner(
+    llm_client: LLMClient | None = None,
+    *,
+    model: str | None = None,
+    knowledge_pack: KnowledgePack | None = None,
+) -> Graph:
     """Build and compile the AI-first scanner graph.
 
     With an LLM client the flow is: 3 hard gates -> analyst -> finalize.
     Without an LLM client the analyst is omitted and ``finalize`` falls back to
     a rule-only neutral decision (kept for offline tests).
+
+    Pass ``knowledge_pack`` to layer a deployment-specific playbook on top of
+    the analyst's default system prompt. Markdown files under ``<pack>/system/``
+    are injected as system messages (filename order) before the analyst's own
+    instructions.
     """
     g = Graph("memecoin_scanner")
     g.add_node(RuleNode("safety_gate", filters.safety_gate))
@@ -49,7 +60,7 @@ def build_scanner(llm_client: LLMClient | None = None, *, model: str | None = No
                 "analyst",
                 llm_client,
                 FullAnalysis,
-                analyst_prompt,
+                make_analyst_prompt(knowledge_pack),
                 output_key="analysis",
                 fallback_fn=neutral_analysis,
                 model=model,

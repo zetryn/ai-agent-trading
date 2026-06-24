@@ -17,8 +17,11 @@ Design notes:
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from trading.schemas import AspectAnalysis, FullAnalysis
 from zetryn.core import State
+from zetryn.knowledge import KnowledgePack
 from zetryn.llm import Message, system, user
 
 _SYSTEM_PROMPT = """You are a senior Solana memecoin analyst working inside an
@@ -116,6 +119,29 @@ def analyst_prompt(state: State) -> list[Message]:
         ]
 
     return [system(_SYSTEM_PROMPT), user("Token fact sheet:\n" + "\n".join(facts))]
+
+
+def make_analyst_prompt(
+    pack: KnowledgePack | None = None,
+) -> Callable[[State], list[Message]]:
+    """Return a prompt builder that prepends a knowledge pack's system blocks.
+
+    When `pack` is None this behaves exactly like `analyst_prompt`. When a pack
+    is provided, every markdown block under `<pack>/system/` is injected as a
+    system message *before* the analyst's own instructions, so deployments can
+    layer their own playbook on top of the default analyst persona.
+    """
+    if pack is None:
+        return analyst_prompt
+
+    pack_blocks = pack.system_blocks()
+    if not pack_blocks:
+        return analyst_prompt
+
+    def fn(state: State) -> list[Message]:
+        return pack_blocks + analyst_prompt(state)
+
+    return fn
 
 
 def neutral_analysis(state: State, exc: Exception) -> FullAnalysis:

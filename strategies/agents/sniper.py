@@ -17,16 +17,25 @@ Speed-first. Modes selected via ``SniperConfig.decision_mode``:
 from __future__ import annotations
 
 from zetryn.core import END, Graph, RuleNode
+from zetryn.knowledge import KnowledgePack
 from zetryn.llm import LLMClient, LLMDecisionNode
 
 from ..nodes import sniper_nodes as sn
 
 
-def build_sniper(llm_client: LLMClient | None = None, *, model: str | None = None) -> Graph:
+def build_sniper(
+    llm_client: LLMClient | None = None,
+    *,
+    model: str | None = None,
+    knowledge_pack: KnowledgePack | None = None,
+) -> Graph:
     """Build and compile the sniper graph.
 
     If ``llm_client`` is None (or config keeps decision_mode='rule'), the LLM nodes
     are not added and the graph stays a pure-rule fast path.
+
+    Pass ``knowledge_pack`` to layer a deployment-specific playbook on top of
+    both the snipe-decide prompt and the hybrid_audit prompt.
     """
     g = Graph("memecoin_sniper")
     g.add_node(RuleNode("fast_safety", sn.fast_safety))
@@ -40,13 +49,20 @@ def build_sniper(llm_client: LLMClient | None = None, *, model: str | None = Non
                 "snipe_decide",
                 llm_client,
                 sn.SnipeDecision,
-                sn.snipe_prompt,
+                sn.make_snipe_prompt(knowledge_pack),
                 sn.snipe_result,
                 guardrail_fn=sn.snipe_guardrail,
                 model=model,
             )
         )
-        g.add_node(RuleNode("audit_dispatch", sn.make_audit_dispatch(llm_client, model=model)))
+        g.add_node(
+            RuleNode(
+                "audit_dispatch",
+                sn.make_audit_dispatch(
+                    llm_client, model=model, knowledge_pack=knowledge_pack
+                ),
+            )
+        )
 
     g.set_entry("fast_safety")
     g.add_edge("fast_safety", "fast_market")

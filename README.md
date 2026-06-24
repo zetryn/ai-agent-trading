@@ -67,6 +67,53 @@ score from nowhere.
 
 ---
 
+## Knowledge vs Skills
+
+Two ways to extend the agent without forking the framework. They solve
+different problems — use both if you need both.
+
+|   | **Knowledge** | **Skills** |
+|---|---|---|
+| What it is | Passive context the LLM **reads** | Callable functions the LLM **invokes** |
+| Form | Markdown rules + JSON data files | Python functions with input schemas |
+| When evaluated | Once, prepended to the system prompt | On demand, mid-analysis |
+| API | [`KnowledgePack`](zetryn/knowledge/pack.py) | [`Tool`, `ToolRegistry`](zetryn/tools/) |
+| Examples | House rules, KOL whitelist, blacklist tokens, lessons | `check_rug(mint)`, `fetch_holders(mint)`, `get_kol_buys(mint)` |
+| Cost | Free (just tokens in the prompt) | Each call is a real API / RPC hit |
+
+**Rule of thumb:** if the LLM should *know* something up front, it's
+**knowledge**. If the LLM should *do* something to get an answer, it's a
+**skill**.
+
+```python
+from zetryn.knowledge import KnowledgePack
+from zetryn.tools import Tool, ToolRegistry
+from strategies import build_scanner
+
+# 1. KNOWLEDGE — facts and rules the analyst reads in every run
+pack = KnowledgePack.from_dir("./my-bot/knowledge")
+#   ./my-bot/knowledge/system/01-house-rules.md
+#   ./my-bot/knowledge/data/kol-whitelist.json
+
+# 2. SKILLS — capabilities the analyst can invoke when it needs more data
+async def check_rug(mint: str) -> dict:
+    return await rugcheck_api.score(mint)
+
+tools = ToolRegistry()
+tools.register(Tool("check_rug", "On-chain rug verification", check_rug))
+
+# 3. Wire both into the agent
+scanner = build_scanner(llm, knowledge_pack=pack)
+# (tool-use loop wiring lands in a follow-up release — see CAPABILITIES.md)
+```
+
+**Status:** `KnowledgePack` injection is fully wired into the scanner and
+sniper as of 0.2.0. `Tool` / `ToolRegistry` exists and can be called from
+rule nodes today; an LLM-driven tool-use loop (so the analyst can invoke
+tools mid-decision on its own) is on the roadmap.
+
+---
+
 ## Two agents, four sniper modes
 
 ### Agent A — Scanner

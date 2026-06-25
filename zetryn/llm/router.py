@@ -68,6 +68,50 @@ PROVIDER_FREE_TIER_LIMITS: dict[str, dict[str, RateLimit]] = {
     "openrouter": {
         ":free": RateLimit(rpm=20, rpd=50),
     },
+    # Cerebras free tier — source: https://inference-docs.cerebras.ai/
+    # Wafer-scale hardware; ~2,600 tok/s output speed. RPM is the practical
+    # constraint on free tier (TPM is generous).
+    "cerebras": {
+        "llama-4-scout-17b-16e-instruct":   RateLimit(rpm=30, tpm=60_000, tpd=1_000_000),
+        "llama-3.3-70b":                    RateLimit(rpm=30, tpm=60_000, tpd=1_000_000),
+        "qwen-3-32b":                       RateLimit(rpm=30, tpm=60_000, tpd=1_000_000),
+        "qwen-3-235b-a22b-instruct-2507":   RateLimit(rpm=5,  tpm=30_000, tpd=1_000_000),
+        "gpt-oss-120b":                     RateLimit(rpm=30, tpm=60_000, tpd=1_000_000),
+        "glm-4.5-air":                      RateLimit(rpm=5,  tpm=30_000, tpd=1_000_000),
+    },
+    # Mistral La Plateforme — "Experiment plan" free tier.
+    # Source: https://docs.mistral.ai/
+    # Very tight RPM (2!) but huge monthly TPM budget. Best for low-volume
+    # high-quality calls, NOT a primary for live trading.
+    "mistral": {
+        "mistral-large-latest":   RateLimit(rpm=2, tpm=500_000),
+        "mistral-small-latest":   RateLimit(rpm=2, tpm=500_000),
+        "codestral-latest":       RateLimit(rpm=2, tpm=500_000),
+        "pixtral-12b-2409":       RateLimit(rpm=2, tpm=500_000),
+        "mistral-embed":          RateLimit(rpm=2, tpm=500_000),
+    },
+    # SambaNova Cloud free tier — source: https://cloud.sambanova.ai/
+    # RDU hardware. New accounts get $5 credit for 30 days; after that the
+    # listed RPM caps apply per model.
+    "sambanova": {
+        "Meta-Llama-3.1-8B-Instruct":   RateLimit(rpm=30, rpd=20, tpd=200_000),
+        "Meta-Llama-3.1-70B-Instruct":  RateLimit(rpm=20, rpd=20, tpd=200_000),
+        "Meta-Llama-3.1-405B-Instruct": RateLimit(rpm=10, rpd=20, tpd=200_000),
+        "Meta-Llama-3.3-70B-Instruct":  RateLimit(rpm=20, rpd=20, tpd=200_000),
+        "Qwen2.5-72B-Instruct":         RateLimit(rpm=20, rpd=20, tpd=200_000),
+    },
+    # NVIDIA NIM (build.nvidia.com) — free for prototyping, phone-verified.
+    # Source: https://build.nvidia.com/
+    # Same flat limit across most models on free tier; some preview models
+    # have lower caps.
+    "nvidia_nim": {
+        "deepseek-ai/deepseek-r1":              RateLimit(rpm=40),
+        "deepseek-ai/deepseek-v3":              RateLimit(rpm=40),
+        "meta/llama-3.3-70b-instruct":          RateLimit(rpm=40),
+        "meta/llama-3.1-405b-instruct":         RateLimit(rpm=40),
+        "nvidia/nemotron-4-340b-instruct":      RateLimit(rpm=40),
+        "qwen/qwen2.5-coder-32b-instruct":      RateLimit(rpm=40),
+    },
 }
 
 
@@ -243,3 +287,100 @@ class LLMRouter:
             close = getattr(entry.client, "aclose", None)
             if close is not None:
                 await close()
+
+
+# -- tier preset builders ----------------------------------------------------
+#
+# Convenience constructors that assemble `RouterEntry` lists tuned for one
+# of three production patterns. Each builder takes a `clients_by_provider`
+# dict the caller built (so the framework stays decoupled from how the user
+# wires their keys / API calls). They return a list of RouterEntry suitable
+# for `LLMRouter(entries=...)`.
+#
+# The builder does the boring per-model preset wiring so the caller's code
+# stays short.
+
+
+@dataclass
+class TierSpec:
+    """One (provider, model) tuple inside a tier preset."""
+
+    provider: str
+    model: str
+
+
+# Tier presets — ordered lists of (provider, model). The order is the
+# failover order: index 0 is the primary, subsequent entries are fallbacks.
+# Use `build_tier_entries()` to materialise these into RouterEntry objects.
+
+TIER_SPEED: list[TierSpec] = [
+    # ~2,600 tok/s — fastest free inference on the market right now.
+    TierSpec("cerebras", "llama-3.3-70b"),
+    # Fallback to Groq if Cerebras is exhausted.
+    TierSpec("groq", "openai/gpt-oss-20b"),
+    TierSpec("groq", "llama-3.3-70b-versatile"),
+]
+
+TIER_QUALITY: list[TierSpec] = [
+    # Largest open model gratis (405B) for deep reasoning.
+    TierSpec("sambanova", "Meta-Llama-3.1-405B-Instruct"),
+    # 1M-token context on the fallback.
+    TierSpec("gemini", "gemini-2.5-flash"),
+    # Final fallback: balanced Groq model.
+    TierSpec("groq", "llama-3.3-70b-versatile"),
+]
+
+TIER_VOLUME: list[TierSpec] = [
+    # OpenRouter's free tier is the highest-volume option (35+ models share
+    # the :free bucket, 50 RPD / 1000 RPD with $10 top-up).
+    # Note: model name is a placeholder; user picks the actual :free model.
+    TierSpec("openrouter", "deepseek/deepseek-r1:free"),
+    # Gemini Flash for context-heavy fallback.
+    TierSpec("gemini", "gemini-2.5-flash"),
+    # Groq as final fallback for low-latency calls.
+    TierSpec("groq", "openai/gpt-oss-20b"),
+]
+
+
+def build_tier_entries(
+    tier: list[TierSpec],
+    clients_by_provider: dict[str, LLMClient],
+) -> list[RouterEntry]:
+    """Materialise a tier preset into a list of RouterEntry.
+
+    The caller is responsible for building one `LLMClient` per provider
+    they have keys for (the framework cannot know the env var names).
+    Providers absent from `clients_by_provider` are silently skipped —
+    the resulting tier degrades gracefully, never errors.
+
+    Example:
+        from zetryn.llm import (
+            TIER_SPEED, build_tier_entries, LLMRouter,
+            OpenAICompatibleClient, ProviderConfig,
+            CEREBRAS_BASE_URL, GROQ_BASE_URL,
+        )
+
+        clients = {
+            "cerebras": OpenAICompatibleClient(ProviderConfig(
+                name="cerebras", base_url=CEREBRAS_BASE_URL,
+                model="llama-3.3-70b",
+                key_envs=["CEREBRAS_API_KEY"])),
+            "groq": OpenAICompatibleClient(ProviderConfig(
+                name="groq", base_url=GROQ_BASE_URL,
+                model="openai/gpt-oss-20b",
+                key_envs=["GROQ_API_KEY_1", "GROQ_API_KEY_2"])),
+        }
+        entries = build_tier_entries(TIER_SPEED, clients)
+        router = LLMRouter(entries)
+    """
+    entries: list[RouterEntry] = []
+    for spec in tier:
+        client = clients_by_provider.get(spec.provider)
+        if client is None:
+            continue
+        entries.append(RouterEntry(
+            client=client,
+            name=f"{spec.provider}:{spec.model}",
+            limit=get_free_tier_limit(spec.provider, spec.model),
+        ))
+    return entries

@@ -53,6 +53,11 @@ class ProviderConfig:
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai"
+# Tier 1 — additional free-tier providers (no credit card required):
+CEREBRAS_BASE_URL = "https://api.cerebras.ai/v1"
+MISTRAL_BASE_URL = "https://api.mistral.ai/v1"
+SAMBANOVA_BASE_URL = "https://api.sambanova.ai/v1"
+NVIDIA_NIM_BASE_URL = "https://integrate.api.nvidia.com/v1"
 # Tier 2 — paid (next level). OpenAI is OpenAI-compatible; Anthropic (Claude) needs
 # a native adapter for prompt caching and is added separately, or reached via
 # OpenRouter for the OpenAI-compatible path.

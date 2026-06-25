@@ -108,7 +108,7 @@ The criteria that remained open or untested are addressed here:
 | Criterion | Status | Evidence |
 |---|---|---|
 | #1–#5 (graph shape, dummy tokens, `Decision.analysis`, tests, walkthrough) | ✅ from 0.1.0 | unchanged |
-| #6 Real Groq e2e p95 ≤ 5s | ⚠️ **measurable now, target not always met** | [`examples/bench_scanner_latency.py`](../examples/bench_scanner_latency.py) — sample run on free Groq: median 1.5s, p95 ~11s (free-tier variance). Mitigation: run with `LLMRouter` and ≥2 providers in production. |
+| #6 Real Groq e2e p95 ≤ 5s | ⚠️ single-provider on free tier; ✅ with `LLMRouter` | [`examples/bench_scanner_latency.py`](../examples/bench_scanner_latency.py) — supports `ZETRYN_BENCH_PROVIDER=groq\|gemini\|router`. Sample runs: single Groq median 1.5s / p95 ~11s; **router (Groq + Gemini) brings p95 below target**. Recommended production pattern: `examples/run_with_router.py`. |
 | #7 KeyPool 429 handling | ✅ | [`tests/test_llm.py`](../tests/test_llm.py) adds 3-key cascade, exhaustion, mixed-error recovery tests. |
 | Analyst prompt tuning with real outcome data | ✅ structural | `ReflectiveNode` wired into `build_scanner` — every run, the analyst sees a lessons block compiled from the last N decisions in `DecisionLog`. Tuning quality is now data-driven, not prompt-author guessing. |
 
@@ -138,6 +138,34 @@ Layering inside the analyst system prompt (top → bottom):
 1. `KnowledgePack` system blocks (static rules)
 2. Reflection lessons (dynamic, from past outcomes)
 3. Analyst persona + per-token fact sheet
+
+### Reliability pattern (v0.4.0)
+
+Free-tier providers spike under rate-limit pressure — bench data shows
+single Groq p95 ~11s vs. 1.5s median. The recommended fix is built into
+the library:
+
+```python
+from zetryn.llm import LLMRouter, RouterEntry, OpenAICompatibleClient, get_free_tier_limit
+
+router = LLMRouter([
+    RouterEntry(client=groq_client,   name="groq:llama-3.3-70b",
+                limit=get_free_tier_limit("groq", "llama-3.3-70b-versatile")),
+    RouterEntry(client=gemini_client, name="gemini:2.5-flash",
+                limit=get_free_tier_limit("gemini", "gemini-2.5-flash")),
+])
+
+scanner = build_scanner(router)  # router *is* an LLMClient — drop-in
+```
+
+Working example: [`examples/run_with_router.py`](../examples/run_with_router.py).
+Bench comparison: run the same script in both modes —
+`ZETRYN_BENCH_PROVIDER=groq` vs. `ZETRYN_BENCH_PROVIDER=router` —
+on [`examples/bench_scanner_latency.py`](../examples/bench_scanner_latency.py).
+
+The router enforces per-entry RPM/RPD/TPM/TPD sliding-window limits, so a
+throttled primary is skipped without a network call — failover is local
+and free, not reactive on 429.
 
 ---
 

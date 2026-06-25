@@ -372,8 +372,11 @@ What's built (v0.3.0):
 
 Known limits:
 
-- Free-tier Groq p95 can spike past the M8 5s target — mitigation is
-  `LLMRouter` with ≥2 providers (Groq + Gemini Flash). See CAPABILITIES.md §5.
+- Single-provider free tier can spike p95 past the M8 5s target.
+  **Recommended production pattern: `LLMRouter` with ≥2 providers**
+  (Groq + Gemini Flash). Working example:
+  [`examples/run_with_router.py`](examples/run_with_router.py). See
+  CAPABILITIES.md §5 "Reliability pattern".
 - Zetryn platform (hosted models, subscription auth) is **not yet live** —
   the seam is stubbed; production uses public providers with your own keys.
 - LLM tool-use loop is the next "small" feature on the list — see

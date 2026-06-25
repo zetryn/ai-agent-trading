@@ -11,10 +11,15 @@ Skipped automatically if no provider key is set. To run:
 Optional knobs (env vars):
     ZETRYN_BENCH_RUNS       how many scans to time (default: 20)
     ZETRYN_BENCH_MODEL      model id (default: llama-3.3-70b-versatile)
-    ZETRYN_BENCH_PROVIDER   groq | gemini (default: groq)
+    ZETRYN_BENCH_PROVIDER   groq | gemini | router (default: groq)
+                            router = LLMRouter([groq, gemini]) failover
 
 The script reports min / median / p95 / max latency and verifies the
 acceptance bar. Exit code is non-zero if p95 > 5.0s.
+
+Comparing modes: run with ZETRYN_BENCH_PROVIDER=groq first to see the
+free-tier variance, then with ZETRYN_BENCH_PROVIDER=router to see how
+much multi-provider failover tames p95.
 """
 
 from __future__ import annotations
@@ -34,9 +39,13 @@ from zetryn.core import State
 from zetryn.llm import (
     GEMINI_BASE_URL,
     GROQ_BASE_URL,
+    LLMRouter,
     OpenAICompatibleClient,
     ProviderConfig,
+    RouterEntry,
+    get_free_tier_limit,
 )
+from zetryn.llm.client import LLMClient
 
 P95_TARGET_SECONDS = 5.0
 
@@ -93,22 +102,79 @@ def _build_provider() -> ProviderConfig | None:
     raise SystemExit(f"unsupported provider: {provider}")
 
 
+def _build_router_client() -> tuple[LLMClient | None, str]:
+    """Build an LLMRouter covering whichever providers have keys configured.
+
+    Returns (client, label). client is None if no provider key is set.
+    """
+    entries: list[RouterEntry] = []
+    label_parts: list[str] = []
+
+    groq_keys = _discover_keys("GROQ_API_KEY")
+    if groq_keys:
+        groq_model = os.environ.get("ZETRYN_GROQ_MODEL", "llama-3.3-70b-versatile")
+        entries.append(
+            RouterEntry(
+                client=OpenAICompatibleClient(
+                    ProviderConfig(
+                        name="groq", base_url=GROQ_BASE_URL, model=groq_model,
+                        key_envs=groq_keys, timeout_s=15.0,
+                    )
+                ),
+                name=f"groq:{groq_model}",
+                limit=get_free_tier_limit("groq", groq_model),
+            )
+        )
+        label_parts.append(f"groq×{len(groq_keys)}")
+
+    gemini_keys = _discover_keys("GEMINI_API_KEY")
+    if gemini_keys:
+        gemini_model = os.environ.get("ZETRYN_GEMINI_MODEL", "gemini-2.5-flash")
+        entries.append(
+            RouterEntry(
+                client=OpenAICompatibleClient(
+                    ProviderConfig(
+                        name="gemini", base_url=GEMINI_BASE_URL, model=gemini_model,
+                        key_envs=gemini_keys, timeout_s=15.0,
+                    )
+                ),
+                name=f"gemini:{gemini_model}",
+                limit=get_free_tier_limit("gemini", gemini_model),
+            )
+        )
+        label_parts.append(f"gemini×{len(gemini_keys)}")
+
+    if not entries:
+        return None, ""
+    return LLMRouter(entries), " + ".join(label_parts)
+
+
 async def main() -> int:
     _load_env_file()
-    cfg = _build_provider()
-    if cfg is None:
-        print(
-            "SKIP: no provider key set. Set GROQ_API_KEY_1 (or GEMINI_API_KEY_1) "
-            "in your environment or .env file."
-        )
-        return 0
+    mode = os.environ.get("ZETRYN_BENCH_PROVIDER", "groq").lower()
+
+    if mode == "router":
+        llm, label = _build_router_client()
+        if llm is None:
+            print("SKIP: no provider keys set for router mode.")
+            return 0
+        bench_label = f"LLMRouter[{label}]"
+    else:
+        cfg = _build_provider()
+        if cfg is None:
+            print(
+                "SKIP: no provider key set. Set GROQ_API_KEY_1 (or GEMINI_API_KEY_1) "
+                "in your environment or .env file."
+            )
+            return 0
+        llm = OpenAICompatibleClient(cfg)
+        bench_label = f"{cfg.name} {cfg.model} (keys={len(cfg.key_envs)})"
 
     runs = int(os.environ.get("ZETRYN_BENCH_RUNS", "20"))
-    print(f"Provider: {cfg.name}  Model: {cfg.model}  Keys: {len(cfg.key_envs)}")
+    print(f"Mode: {bench_label}")
     print(f"Running {runs} scans against the 'GOOD' sample token...")
-
-    llm = OpenAICompatibleClient(cfg)
-    scanner = build_scanner(llm, model=cfg.model)
+    # Router carries its own model per entry; only pass explicit model in single-provider mode.
+    scanner = build_scanner(llm) if mode == "router" else build_scanner(llm, model=cfg.model)
 
     latencies_ms: list[float] = []
     failures = 0

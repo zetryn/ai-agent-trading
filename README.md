@@ -237,10 +237,16 @@ The same agents, different providers, different cost / quality / speed.
 
 ### Phase 1 — Free (today)
 
-- Groq `llama-3.3-70b-versatile` (primary), Gemini Flash, OpenRouter `:free`
+- Groq `llama-3.3-70b-versatile` (primary), Gemini Flash, OpenRouter `:free`,
+  plus Cerebras / Mistral / SambaNova / NVIDIA NIM (v0.8.0)
 - Single rich `analyst` LLM call per scanner decision
-- `KeyPool` rotates keys within a provider; `LLMRouter` fails over across
-  providers with per-model RPM/RPD/TPM/TPD throttle (free-tier presets included)
+- `KeyPool` rotates keys within an entry; `LLMRouter` fails over across
+  entries (each entry = one `provider + model` combo) with per-model
+  RPM/RPD/TPM/TPD throttle. Rotation order is **entry-by-entry, then
+  key-by-key inside each entry** — see
+  [docs/CAPABILITIES.md §5 "Rotation order"](docs/CAPABILITIES.md) for the
+  full walk-through and why the class is named `LLMRouter` (generic) rather
+  than `ZetrynRouter` (brand-tied).
 - $0/month, suitable for development and early production
 
 ### Phase 2 — Paid

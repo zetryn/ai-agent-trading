@@ -167,6 +167,87 @@ The router enforces per-entry RPM/RPD/TPM/TPD sliding-window limits, so a
 throttled primary is skipped without a network call — failover is local
 and free, not reactive on 429.
 
+### Rotation order (how failover actually walks the tree)
+
+The two primitives that handle rotation are
+[`LLMRouter`](../zetryn/llm/router.py) and `RouterEntry`. Naming note:
+the class is generic (`LLMRouter`, not `ZetrynRouter` / `AgentRouter` /
+etc.) because what it routes is **LLM calls**, not Zetryn-specific
+state — the same router could serve any LLM-driven application.
+Brand-prefixed names (`ZetrynClient`, `ZETRYN_API_BASE`) are reserved
+for primitives that are specifically tied to the Zetryn platform.
+
+A `RouterEntry` represents a `(provider, model)` pair — *not* a
+provider alone. Two models from the same provider are two separate
+entries, each with its own `KeyPool`. This gives the caller full
+control over failover priority (e.g. "Cerebras llama-70b first, then
+Groq gpt-oss-20b, then Groq llama-70b").
+
+On a single LLM call, the rotation walks like this:
+
+```
+LLMRouter
+│
+├── Entry 1 (cerebras + llama-3.3-70b)
+│   └── OpenAICompatibleClient
+│       └── KeyPool[CEREBRAS_KEY_1, CEREBRAS_KEY_2]   ← key rotation here
+│
+├── Entry 2 (groq + gpt-oss-20b)
+│   └── OpenAICompatibleClient
+│       └── KeyPool[GROQ_KEY_1, GROQ_KEY_2, GROQ_KEY_3]
+│
+├── Entry 3 (groq + llama-3.3-70b-versatile)          ← same provider, different model
+│   └── OpenAICompatibleClient
+│       └── KeyPool[GROQ_KEY_1, GROQ_KEY_2, GROQ_KEY_3]
+│
+└── Entry 4 (gemini + gemini-2.5-flash)
+    └── OpenAICompatibleClient
+        └── KeyPool[GEMINI_KEY_1]
+```
+
+```
+1.  Router picks first available Entry (sliding-window check passes,
+    not on cooldown).
+2.  Within that Entry, OpenAICompatibleClient rotates its KeyPool:
+    K1 → 429? → penalise + try K2 → 429? → try K3 → ...
+    On success, return.
+3.  If every key in the Entry hits 429 (or the request keeps timing
+    out), the Entry's call raises LLMError / LLMRateLimitError.
+    Router then penalises the Entry (30s cooldown by default) and
+    moves to the next Entry.
+4.  Repeat 2-3 until success or every Entry is exhausted.
+5.  If every Entry is throttled or cooled down,
+    NoKeysAvailableError bubbles up. LLMNode catches it as an LLM
+    failure and applies the configured fallback (e.g.
+    neutral_kol_verdict), so the graph still returns a Decision
+    instead of crashing.
+```
+
+**Important:** the order is **Entry-by-Entry, then key-by-key inside
+each Entry**. It is *not* "all providers first, then models" or "all
+models first, then keys" — the caller's chosen Entry ordering IS the
+priority. Tier preset specs (`TIER_SPEED`, `TIER_QUALITY`,
+`TIER_VOLUME`) ship in v0.8.0 as opinionated default orderings, but
+they're just lists — you can build any ordering you want.
+
+Each `RouterEntry` carries its own `KeyPool` instance, even if two
+entries reference the same underlying API keys (e.g. two Groq models
+sharing `GROQ_API_KEY_*`). That's deliberate: a 429 on one model
+shouldn't automatically penalise the other.
+
+| Layer | Component | What it rotates | Cooldown |
+|---|---|---|---|
+| Outer | `LLMRouter` | Entries (provider + model combos) | 30s (default) |
+| Outer (preventive) | `LLMRouter._Throttle` | Skips entry **without network call** when RPM/RPD/TPM/TPD almost hit | sliding window |
+| Inner | `OpenAICompatibleClient` retry loop | Keys within the Entry's KeyPool | 60s per key |
+| Inner | `KeyPool.penalize()` | Per-key cooldown on 429 | 60s (default) |
+
+The combination means three completely separate things have to fail
+before the analyst sees an LLM failure: (1) every key in an entry must
+429, (2) every entry in the router must exhaust, and (3) the
+`LLMNode` fallback `fn` must not be set (it almost always is — every
+node in `strategies/` configures one).
+
 ---
 
 ## 6. Roadmap

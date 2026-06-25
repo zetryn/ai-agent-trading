@@ -11,15 +11,26 @@ For each token it prints:
   3) ANALYSIS  — the AI's per-aspect verdict (for tokens that reached the analyst)
   4) OUTPUT    — the final Decision the framework returns to the bot
 
-Runs offline with a stub LLM (no API key needed). The stub is heuristic — it
-inspects the fact sheet to fake a plausible FullAnalysis. A real Groq / Gemini
-key produces a far richer narrative.
+Defaults to a heuristic stub LLM so no API key is needed. To exercise a
+real provider, set environment variables:
+
+    ZETRYN_WALKTHROUGH_USE_GROQ=1        # switch from stub to real Groq
+    ZETRYN_GROQ_MODEL=llama-3.3-70b-versatile  # optional, default shown
+    ZETRYN_WALKTHROUGH_LIMIT=3           # optional, only run first N tokens
+                                           (cheap smoke-test before full 16)
+    GROQ_API_KEY_1=...                   # at least one Groq key required
+    GROQ_API_KEY_2=...                   # optional, multiple keys = key-pool rotation
+
+Real Groq run on the full 16 tokens is ~12 LLM calls (hard-gate rejects
+skip the LLM). At median ~1.5s per call this finishes in roughly 20–30s
+on a single key.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
+import os
 import pathlib
 import re
 import sys
@@ -31,6 +42,7 @@ from dummy_tokens import DUMMY_TOKENS  # noqa: E402
 from strategies import build_scanner  # noqa: E402
 from trading import ScannerConfig, TradingContext  # noqa: E402
 from zetryn.core import State  # noqa: E402
+from zetryn.llm import GROQ_BASE_URL, OpenAICompatibleClient, ProviderConfig  # noqa: E402
 from zetryn.llm.types import LLMResult, Message  # noqa: E402
 
 # --- heuristic stub LLM ----------------------------------------------------
@@ -274,32 +286,99 @@ def print_output(decision) -> None:
     print(f"    latency_ms : {decision.meta.get('latency_ms')}")
 
 
+# --- LLM wiring ------------------------------------------------------------
+
+
+def _load_env_file() -> None:
+    env_file = pathlib.Path(__file__).resolve().parent.parent / ".env"
+    if not env_file.is_file():
+        return
+    for line in env_file.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+def _discover_keys(prefix: str) -> list[str]:
+    keys: list[str] = []
+    if prefix in os.environ:
+        keys.append(prefix)
+    i = 1
+    while f"{prefix}_{i}" in os.environ:
+        keys.append(f"{prefix}_{i}")
+        i += 1
+    return keys
+
+
+def _build_llm():
+    """Return (llm_client, label, has_aclose).
+
+    Stub by default. Set ZETRYN_WALKTHROUGH_USE_GROQ=1 to swap in a real
+    Groq client built from GROQ_API_KEY[_N] env vars.
+    """
+    if os.environ.get("ZETRYN_WALKTHROUGH_USE_GROQ") != "1":
+        return _StubLLM(), "stub (offline heuristic)", False
+
+    _load_env_file()
+    keys = _discover_keys("GROQ_API_KEY")
+    if not keys:
+        print("WARN: ZETRYN_WALKTHROUGH_USE_GROQ=1 but no GROQ_API_KEY[_N] "
+              "found in env or .env — falling back to stub.")
+        return _StubLLM(), "stub (no Groq key found)", False
+
+    model = os.environ.get("ZETRYN_GROQ_MODEL", "llama-3.3-70b-versatile")
+    client = OpenAICompatibleClient(
+        ProviderConfig(
+            name="groq", base_url=GROQ_BASE_URL, model=model,
+            key_envs=keys, timeout_s=30.0,
+        )
+    )
+    return client, f"real Groq | {model} | keys×{len(keys)}", True
+
+
 # --- main ------------------------------------------------------------------
 
 
 async def main() -> None:
-    scanner = build_scanner(_StubLLM())
+    llm, label, has_aclose = _build_llm()
+    print(f"LLM: {label}")
+    scanner = build_scanner(llm)
     config = ScannerConfig()
 
-    for key, (label, token) in DUMMY_TOKENS.items():
+    items = list(DUMMY_TOKENS.items())
+    limit = int(os.environ.get("ZETRYN_WALKTHROUGH_LIMIT", "0"))
+    if limit > 0:
+        items = items[:limit]
+        print(f"LIMIT: only running first {limit} of {len(DUMMY_TOKENS)} tokens "
+              "(unset ZETRYN_WALKTHROUGH_LIMIT to run all).")
+
+    # Cache the results so we don't pay for a second LLM round just to print the summary.
+    runs: list[tuple[str, str, State]] = []
+
+    for key, (case_label, token) in items:
         print("\n" + "=" * 78)
-        print(f"CASE: {key}  —  {label}")
+        print(f"CASE: {key}  —  {case_label}")
         print("=" * 78)
         print_input(token)
         state = await scanner.run(State(context=TradingContext(token=token, config=config)))
         print_processing(state)
         print_analysis(state.output)
         print_output(state.output)
+        runs.append((key, case_label, state))
 
     print("\n" + "=" * 78)
     print("SUMMARY")
     print("=" * 78)
     print(f"  {'case':16} {'action':7} {'conf':>6}  path")
-    for key, (_, token) in DUMMY_TOKENS.items():
-        state = await scanner.run(State(context=TradingContext(token=token, config=config)))
+    for key, _case_label, state in runs:
         d = state.output
         path = " -> ".join(t.node for t in state.trace)
         print(f"  {key:16} {d.action.upper():7} {d.confidence:>6}  {path}")
+
+    if has_aclose:
+        await llm.aclose()
 
 
 if __name__ == "__main__":

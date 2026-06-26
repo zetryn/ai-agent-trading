@@ -73,6 +73,9 @@ question over a wrong-author commit landing on `main`.
 ## Commands
 
 ```bash
+# Activate conda environment (always do this first in a new shell)
+conda activate zetryn
+
 # Install in editable dev mode (always do this first)
 pip install -e ".[dev]"
 
@@ -134,6 +137,7 @@ Node execution pattern: engine snapshots `scratch` before each node → node mut
 - **`KeyPool`** — rotates multiple API keys on 429 to multiply free-tier quota.
 - **`ProviderConfig`** — stores env var *names* (`key_envs`), never key values. Resolved at build time; missing keys fail fast.
 - **`LLMNode`** — wraps an `LLMClient` call with structured output (Pydantic schema), retry/backoff, and graceful fallback (returns neutral score + `llm_failed` flag, never crashes).
+- **`LLMRouter`** (`zetryn/llm/router.py`) — satisfies the `LLMClient` protocol; wraps a list of `RouterEntry` and fails over in declaration order on 429 / timeout / quota exhaustion. Each entry carries an optional `RateLimit` enforced locally via sliding-window counters (best-effort; provider 429s remain authoritative). Three tier presets are exposed: `TIER_SPEED` (Cerebras → Groq), `TIER_QUALITY` (SambaNova 405B → Gemini → Groq), `TIER_VOLUME` (OpenRouter :free → Gemini → Groq). `build_tier_entries(tier, clients_by_provider)` materialises a preset; providers absent from the dict are silently skipped. `PROVIDER_FREE_TIER_LIMITS` / `get_free_tier_limit(provider, model)` expose known free-tier caps.
 - **`ZetrynClient`** (`zetryn/llm/zetryn_client.py`) — client for hosted Zetryn models (Hardes/Medifus/Easfus). Requires a subscription key; currently backed by `LocalSubscriptionAuth` stub.
 
 ### Tools (`zetryn/tools/`)
@@ -147,6 +151,7 @@ Read-only capabilities injectable by the bot. Each `Tool` has a Pydantic input s
 - **`JSONFileStore`** — simple cross-run persistence to a JSON file.
 - **`Blacklist`** — known rug tokens/dev wallets → instant `skip`, saves LLM calls.
 - **`DecisionLog`** — every decision + outcome, used for backtest metrics.
+- **`ReflectiveNode`** (`zetryn/memory/reflective.py`) — deterministic (no LLM) graph node that runs before an analyst node. Loads the last `window` decisions from `DecisionLog`, groups losers by feature buckets (quartile for numeric fields, value-as-string for categoricals), and writes a `lessons` (`ReflectionResult`) and `lessons_text` (human-readable summary) to `state.scratch`. The downstream prompt builder prepends `lessons_text` so the LLM is loss-pattern-aware. The `reflect()` pure function can be used independently of the node.
 
 ### Observability (`zetryn/observability/`)
 
@@ -160,16 +165,25 @@ Structured per-node logging as JSON. `Hooks` protocol (`on_node_start`, `on_node
 
 `Backtester.run(items)` runs the compiled graph over a list of `(id, context)` pairs and returns `BacktestResult`. Test/backtest/live are identical graph runs — just different `DataProvider` implementations injected by the bot.
 
+### Knowledge pack (`zetryn/knowledge/`)
+
+- **`KnowledgePack`** — immutable bundle of static facts loaded from a directory at startup. Layout: `pack_dir/system/*.md` (sorted → system-prompt blocks) and `pack_dir/data/*.json` (structured lookups, e.g. `kol_whitelist.json`, `blacklist-tokens.json`). Constructed via `KnowledgePack.from_dir(path)`. Bot authors the files; framework reads them. Use `MemoryStore` for mutable runtime state — the pack is for facts stable across a run.
+
 ### Trading domain (`trading/schemas.py`)
 
-Shared contract: `TradingContext`, `Decision`, `DataProvider` protocol, market/holder/contract/social data shapes, `ScannerConfig`, `SniperConfig`. This is the *shape agreement* between the bot and the framework.
+Shared contract: `TradingContext`, `Decision`, `DataProvider` protocol, market/holder/contract/social data shapes, `ScannerConfig`, `SniperConfig`, `KOLContext`, `KOLProfile`, `KOLAnalystVerdict`. This is the *shape agreement* between the bot and the framework.
 
 ### Strategies (`strategies/`)
 
 - `strategies/providers.py` — `MockDataProvider` and sample fixtures for offline tests/demos.
-- `strategies/nodes/` — `filters.py` (rule nodes: safety, market, social filters), `decide.py` (aggregate → `Decision`), `prompts.py` (narrative LLM prompts), `sniper_nodes.py`.
+- `strategies/kol_registry.py` — `KOLRegistry`: read-only typed view of `kol_whitelist.json` from a `KnowledgePack`. `KOLRegistry.from_pack(pack)` deserialises per-wallet `KOLProfile` entries plus global thresholds. Bot computes scores/hit-rates offline and ships the JSON; framework only reads.
+- `strategies/nodes/` — `filters.py` (safety/market/social rule nodes), `decide.py` (aggregate → `Decision`), `prompts.py` (narrative LLM prompts), `sniper_nodes.py`, `kol_nodes.py` (KOL fast_safety / kol_quality / fast_market / sizing / kol_analyst_prompt / kol_audit_dispatch rule nodes), `analyst.py` (scanner/sniper analyst LLM prompt builders).
 - `strategies/agents/scanner.py` — `build_scanner(llm)` returns a compiled `Graph`.
 - `strategies/agents/sniper.py` — `build_sniper(llm)` returns a compiled `Graph`.
+- `strategies/agents/kol_copytrade.py` — `build_kol_copytrade(knowledge_pack|registry, *, mode, llm_client, decision_log, ...)` returns a compiled `Graph`. Three modes selectable at build time:
+  - `"rule"` (default) — pure rule path, no LLM, target latency <1ms.
+  - `"confirmed"` — rules gate first, then `kol_analyst` LLMNode approves/vetoes and sets `size_multiplier ∈ [0, 1.5]`. When `decision_log` is provided, `ReflectiveNode("reflect")` runs before the analyst (K7 reflective loop).
+  - `"audit"` — rule sizing decides instantly (bot gets `Decision` immediately); `kol_audit_dispatch` fires an async LLM audit task the bot reads later for offline tuning.
 
 ## Key patterns
 

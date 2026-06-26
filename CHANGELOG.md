@@ -5,6 +5,55 @@ All notable changes to `zetryn-trading` will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] — 2026-06-26
+
+K7 shipped — KOL Copy-Trade × `ReflectiveNode` integration. With this
+release the K-series is feature-complete: KOL Copy-Trade now supports
+rule / confirmed / audit / reflective in four orthogonal modes.
+
+### Added
+- **`build_kol_copytrade(..., decision_log=DecisionLog, reflect_window=20,
+  reflect_feature_keys=None, reflect_top_k=5)`** — when a `decision_log`
+  is provided in `confirmed` mode, a `ReflectiveNode` is inserted
+  between `fast_market` and `kol_analyst`. It compiles a `lessons_text`
+  summary of recent losers; the analyst prompt prepends it as a system
+  block titled `LESSONS from recent KOL copy-trade outcomes`. The LLM
+  conditions on real outcomes, not just the static prompt.
+- **`kol_analyst_prompt` change** — reads `state.scratch["lessons_text"]`
+  when present and appends one extra system message between the
+  analyst persona and the per-token fact sheet. Empty / missing → no
+  change (backwards-compat with v0.7.0).
+- **`examples/run_kol_copytrade.py` `ZETRYN_KOL_REFLECT=1` switch** —
+  seeds three mock historical losers into an in-memory `DecisionLog`
+  so users can see the lessons block reach the analyst with a real
+  Groq run.
+- **`tests/test_kol_reflective_loop.py`** — 7 cases covering: optional
+  `decision_log` param in rule mode, reflect node only added in
+  confirmed mode, end-to-end happy path with lessons in prompt,
+  backwards-compat (confirmed without log), empty-log edge case,
+  `reflect_window` parameter threading, and hard-gate short-circuit
+  bypassing reflect.
+
+### Verified end-to-end
+With three mock losers seeded and `openai/gpt-oss-20b` via Groq, the
+analyst materially changed verdicts on six contrasting scenarios:
+- Scenario A (Perfect Storm) dropped from multiplier 1.3 to 0.6,
+  citing the historical loser pattern by name.
+- Scenarios B, D, F flipped from BUY-with-reduced-size to SKIP.
+- The trace path on every confirmed scenario showed
+  `... → fast_market → reflect → kol_analyst → sizing` instead of
+  `... → fast_market → kol_analyst → sizing`.
+
+### Notes
+- Reflection only runs in `confirmed` mode. `rule` mode has no LLM to
+  condition; `audit` mode emits its decision before the analyst would
+  see the lessons, and runs reflection offline via the bot's own
+  pipeline if desired.
+- Boundary held: framework only **reads** the `DecisionLog`. The bot
+  remains responsible for writing outcomes back via `record_outcome`
+  after a trade settles. No new fetcher or executor landed inside the
+  framework.
+
 ## [0.9.0] — 2026-06-26
 
 K6: KOL Copy-Trade `audit` mode. The "AI Agent" claim now extends to a

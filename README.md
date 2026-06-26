@@ -358,25 +358,27 @@ reverse.
 
 ## Status
 
-**Maturity:** Alpha (v0.9.0) — actively developed, breaking changes possible
+**Maturity:** Alpha (v0.10.0) — actively developed, breaking changes possible
 between 0.x releases until the API stabilises.
 
 **Single source of truth for roadmap & milestone status:**
 [`docs/CAPABILITIES.md`](docs/CAPABILITIES.md) §6. The summary below is just
 a snapshot — the table over there is what gets updated on every release.
 
-What's built (v0.6.0):
+What's built (v0.10.0):
 
 - Core engine, LLM layer, tools, memory, observability, auth seam, backtest
 - **Three reference strategies in `strategies/agents/`:**
   - Scanner v2 (AI-first, M8) — general classifier, learning loop closed via
     `build_scanner(..., decision_log=...)`
   - Sniper (M9) — `rule` / `llm` / `hybrid` / `hybrid_audit` modes
-  - **KOL Copy-Trade (v0.7.0)** — first strategy with an explicit entry
-    hypothesis. Two modes: `rule` (sub-ms, no LLM) and **`confirmed`**
-    (LLM analyst can veto or scale size via `KOLAnalystVerdict`).
+  - **KOL Copy-Trade — feature-complete**: `rule` (sub-ms), `confirmed`
+    (LLM analyst vetoes or scales size via `KOLAnalystVerdict`),
+    `audit` (rule sub-ms + async LLM verify), and `confirmed +
+    decision_log` (K7, v0.10.0 — analyst sees recent loser patterns).
     Example: [`examples/run_kol_copytrade.py`](examples/run_kol_copytrade.py)
-    (`ZETRYN_KOL_USE_GROQ=1` flips it to confirmed mode with real Groq)
+    (`ZETRYN_KOL_USE_GROQ=1 ZETRYN_KOL_REFLECT=1` exercises the full
+    learning loop with real Groq).
 - Pre-P1 foundations: `KnowledgePack`, `LLMRouter` (multi-provider failover
   + per-model throttle), `ReflectiveNode`
 - **7 LLM providers** wired with per-model free-tier presets:

@@ -278,8 +278,8 @@ table on every release** — README and plan docs link here instead of duplicati
 | **K5** | **KOL Copy-Trade `confirmed` mode** — LLM analyst between rules and sizing, can veto or scale size via `KOLAnalystVerdict` | ✅ done | v0.7.0 |
 | **Provider expansion** | **7 providers wired** (Groq, Gemini, OpenRouter + Cerebras, Mistral, SambaNova, NVIDIA NIM) with per-model presets + `TIER_SPEED/QUALITY/VOLUME` router builders | ✅ done | v0.8.0 |
 | **K6** | **KOL Copy-Trade `audit` mode** — rule decides sub-ms (Decision returned immediately), LLM verifies in the background via `kol_audit_task`. Mirror of sniper's `hybrid_audit`. | ✅ done | v0.9.0 |
-| K6 | KOL Copy-Trade `audit` mode (async LLM second opinion after rule decide) | 📅 later | — |
-| K7 | KOL Copy-Trade × `ReflectiveNode` integration | 📅 later | — |
+| **K7** | **KOL Copy-Trade × `ReflectiveNode` integration** — `decision_log` param on `build_kol_copytrade`; analyst sees a `lessons_text` block compiled from recent losers. (v0.10.0 shipped the wiring; v0.11.0 hotfixed `kol_analyst_prompt` to actually inject the block — the prompt change was documented but missed in v0.10.0.) | ✅ done | v0.10.0 + v0.11.0 hotfix |
+| **Sniper × Reflect** | **Sniper LLM path conditions on recent losers** — `build_sniper(decision_log=...)` inserts `ReflectiveNode` between `fast_market` and `snipe_decide` in `llm` / `hybrid` modes. Skipped in `hybrid_audit` to preserve the sub-ms sync path. Closes the last strategy-consistency gap. | ✅ done | v0.11.0 |
 | M11 | Phase 2 LLM strategy — parallel specialist nodes (paid providers) | 📅 later | — |
 | M12 | Phase 3 LLM strategy — Zetryn model mapping (Easfus/Medifus/Hardes) | 📅 platform-dependent | — |
 | M13+ | YAML loader, multi-agent panel (mixed roles, Anthropic-style), vector memory | 📅 earned later | — |

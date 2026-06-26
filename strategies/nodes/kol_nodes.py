@@ -192,6 +192,21 @@ def fast_market(state: State) -> Command | None:
 # -- node 4 (optional, confirmed mode): LLM analyst -------------------------
 
 
+_KOL_LESSONS_HEADER = (
+    "LESSONS from recent KOL copy-trade outcomes — use these to avoid "
+    "repeating losing patterns. The agent ran on the same data sources "
+    "and these are real outcomes:"
+)
+
+
+def _kol_lessons_block(state: State) -> Message | None:
+    """Return a system message with the ReflectiveNode summary, or None if absent."""
+    text = state.scratch.get("lessons_text")
+    if not text or not isinstance(text, str):
+        return None
+    return system(f"{_KOL_LESSONS_HEADER}\n\n{text}")
+
+
 def kol_analyst_prompt(state: State) -> list[Message]:
     """Build the analyst prompt for `confirmed` mode.
 
@@ -199,6 +214,11 @@ def kol_analyst_prompt(state: State) -> list[Message]:
     check. The analyst is NOT deciding "buy or not from scratch" — it is
     looking for qualitative red flags the rule layer cannot encode, and
     nudging size based on observed confluence.
+
+    When ``state.scratch["lessons_text"]`` is set by a ``ReflectiveNode``
+    upstream, an extra system message is inserted between the analyst
+    persona and the per-token fact sheet so the LLM conditions on real
+    historical outcomes — closing the K7 learning loop.
     """
     ctx = state.context
     ev = ctx.event
@@ -237,7 +257,7 @@ def kol_analyst_prompt(state: State) -> list[Message]:
         f"  kol_buying_5m={s.kol_count_5m}",
     ]
 
-    return [
+    messages: list[Message] = [
         system(
             "You are a senior memecoin trade auditor. A KOL has just made a buy "
             "on Solana, and a rule-based filter has already approved both the "
@@ -279,8 +299,12 @@ def kol_analyst_prompt(state: State) -> list[Message]:
             "    * three or more independent red flags compound\n"
             "List concerns as short phrases. Reasoning is one or two sentences."
         ),
-        user("Fact sheet:\n" + "\n".join(facts)),
     ]
+    lessons = _kol_lessons_block(state)
+    if lessons is not None:
+        messages.append(lessons)
+    messages.append(user("Fact sheet:\n" + "\n".join(facts)))
+    return messages
 
 
 def neutral_kol_verdict(state: State, exc: Exception) -> KOLAnalystVerdict:

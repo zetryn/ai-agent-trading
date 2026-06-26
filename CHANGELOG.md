@@ -5,6 +5,54 @@ All notable changes to `zetryn-trading` will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] — 2026-06-27
+
+Two changes ship together: a K7 hotfix that wires the KOL reflective loop
+end-to-end (the v0.10.0 prompt change was documented but never landed),
+and `build_sniper` gains the same reflective loop the scanner and KOL
+copy-trade already had — closing the strategy-consistency gap.
+
+### Fixed
+- **K7 hotfix — `kol_analyst_prompt` now actually reads `lessons_text`.**
+  In v0.10.0 the `ReflectiveNode` ran and populated `state.scratch`, but
+  `kol_analyst_prompt` never injected the lessons block into the analyst
+  prompt, so the LLM was never actually loss-pattern-aware. The K7
+  release note documented the prompt change but the code change was
+  missed. The block now appears as a system message between the analyst
+  persona and the per-token fact sheet, titled
+  `LESSONS from recent KOL copy-trade outcomes`. The existing
+  `test_confirmed_with_log_injects_lessons_into_analyst_prompt` test was
+  already asserting this behavior and was failing on v0.10.0 — it now
+  passes.
+
+### Added
+- **`build_sniper(decision_log=..., reflect_window=..., reflect_feature_keys=...,
+  reflect_top_k=...)`** — when a `DecisionLog` is provided AND
+  `decision_mode` is `llm` or `hybrid`, a `ReflectiveNode` runs between
+  `fast_market` and `snipe_decide`. The LLM sees a `lessons_text` block
+  compiled from recent losers as a system message. The sniper's
+  `snipe_prompt` now reads `state.scratch["lessons_text"]` and injects
+  it between the persona and the user fact sheet (same pattern as
+  scanner + KOL analyst). All three strategies now share an identical
+  learning-loop shape.
+- **Reflection intentionally NOT wired into `hybrid_audit` mode.** That
+  mode's promise is a sub-ms sync rule path; reading `DecisionLog`
+  synchronously would defeat it. The bot's offline pipeline owns
+  reflection for audit mode.
+- **`tests/test_sniper_reflective_loop.py`** — 8 cases covering: no-log
+  backwards-compat in llm mode, reflect ordering between fast_market
+  and snipe_decide, LESSONS block reaching the prompt in hybrid mode,
+  empty-log graceful behavior, `reflect_window` parameter threading,
+  rule mode skips reflect, hybrid_audit skips reflect (sub-ms preserved),
+  and `llm_client=None` short-circuits the whole LLM branch.
+
+### Notes
+- Boundary held: framework only **reads** `DecisionLog`. Bot still
+  writes outcomes via `record_outcome` after a trade settles. No new
+  fetcher or executor landed inside the framework.
+- Strategy consistency: scanner, KOL copy-trade, and sniper now all
+  expose the same `decision_log` + `reflect_*` parameters.
+
 ## [0.10.0] — 2026-06-26
 
 K7 shipped — KOL Copy-Trade × `ReflectiveNode` integration. With this

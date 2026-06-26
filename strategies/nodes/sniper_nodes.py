@@ -88,27 +88,53 @@ class SnipeDecision(BaseModel):
     reasoning: str = ""
 
 
+_SNIPE_LESSONS_HEADER = (
+    "LESSONS from recent snipe outcomes — use these to avoid repeating "
+    "losing patterns. The agent ran on the same data sources and these "
+    "are real outcomes:"
+)
+
+
+def _snipe_lessons_block(state: State) -> Message | None:
+    """Return a system message with the ReflectiveNode summary, or None if absent."""
+    text = state.scratch.get("lessons_text")
+    if not text or not isinstance(text, str):
+        return None
+    return system(f"{_SNIPE_LESSONS_HEADER}\n\n{text}")
+
+
 def snipe_prompt(state: State) -> list[Message]:
     t = state.context.token
-    return [
+    messages: list[Message] = [
         system(
             "You are a fast memecoin snipe decider. Given a token that already passed "
             "safety and liquidity gates, decide buy/skip/abort and a size fraction. "
             "Be decisive but risk-aware."
         ),
+    ]
+    lessons = _snipe_lessons_block(state)
+    if lessons is not None:
+        messages.append(lessons)
+    messages.append(
         user(
             f"{t.symbol} ({t.name}) mcap=${t.market.mcap:,.0f} "
             f"liq=${t.market.liquidity_usd:,.0f} vol1h=${t.market.volume_1h:,.0f} "
             f"holders={t.holders.count} top10={t.holders.top10_pct:.0%} "
             f"KOL5m={t.social.kol_count_5m}"
-        ),
-    ]
+        )
+    )
+    return messages
 
 
 def make_snipe_prompt(
     pack: KnowledgePack | None = None,
 ) -> Callable[[State], list[Message]]:
-    """Return a snipe prompt builder that prepends a knowledge pack's blocks."""
+    """Return a snipe prompt builder that prepends a knowledge pack's blocks.
+
+    The returned builder also picks up ``state.scratch["lessons_text"]`` when a
+    ``ReflectiveNode`` upstream has populated it — closing the learning loop on
+    the sniper's LLM path.
+    """
     if pack is None:
         return snipe_prompt
     pack_blocks = pack.system_blocks()

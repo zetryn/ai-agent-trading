@@ -1,5 +1,10 @@
 [build-system]
-requires = ["hatchling"]
+# Pin hatchling<1.27 to keep Metadata-Version 2.3.
+# Hatchling 1.27+ emits Metadata-Version 2.4 with the PEP 639 `License-File:`
+# field, which PyPI's Warehouse validator rejects with
+# "unrecognized or malformed field 'license-file'" as of mid-2026.
+# Unpin once PyPI catches up to PEP 639.
+requires = ["hatchling<1.27"]
 build-backend = "hatchling.build"
 
 [project]

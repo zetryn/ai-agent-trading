@@ -19,3 +19,4 @@ any new strategy.
 | 2026-06-24 | [AI-First Pivot](2026-06-24-ai-first-pivot.md) | Historical (ADR, implemented) |
 | 2026-06-25 | [KOL Copy-Trade Strategy](2026-06-25-kol-copytrade-strategy.md) | K1–K7 Shipped (v0.7.0–v0.11.0) |
 | 2026-06-27 | [Pump.fun Graduation Snipe](2026-06-27-graduation-snipe-strategy.md) | Shipped (v0.12.0) |
+| 2026-06-27 | [PL1 — Position Lifecycle Helpers](2026-06-27-position-lifecycle-helpers.md) | Shipped (v0.13.0) |

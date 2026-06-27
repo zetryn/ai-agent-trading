@@ -295,7 +295,11 @@ class TradingContext:
 class Decision(BaseModel):
     """The framework's output. The bot executes (or not) based on this."""
 
-    action: Literal["alert", "watch", "skip", "buy", "abort"]
+    action: Literal[
+        "alert", "watch", "skip", "buy", "abort",
+        # Position-management actions (v0.13.0 / PL1)
+        "hold", "take_profit", "scale_out", "exit_full",
+    ]
     confidence: float = Field(ge=0, le=1, default=0.0)
     size: float | None = None
     scores: dict[str, float] = Field(default_factory=dict)  # safety/market/social/...
@@ -501,5 +505,85 @@ class GraduationVerdict(BaseModel):
     action: Literal["buy", "skip", "abort"]
     confidence: float = Field(ge=0, le=1)
     size_pct: float = Field(ge=0, le=1)
+    reasoning: str = ""
+    concerns: list[str] = Field(default_factory=list)
+
+
+# -- Position Lifecycle Helpers (v0.13.0 / PL1) ------------------------------
+#
+# First position-management agent. Framework decides hold / TP / scale_out /
+# exit_full on an open position. The bot owns position persistence; it
+# pushes a fresh `PositionContext` per tick.
+
+
+class PartialExit(BaseModel):
+    """A ladder rung already executed by the bot. Used to skip rungs that
+    have already been hit so the agent doesn't recommend selling twice."""
+
+    sold_at_pnl_pct: float
+    sold_size: float
+    sold_at_ts: float
+
+
+class PositionState(BaseModel):
+    """Complete snapshot of an open position, pushed by the bot per tick."""
+
+    entry_price: float
+    entry_size: float
+    entry_ts: float
+
+    current_price: float
+    current_size: float       # what's left after any partial exits
+    pnl_pct: float            # (current - entry) / entry — signed
+    holding_seconds: float
+
+    peak_pnl_pct: float = 0.0
+    drawdown_from_peak_pct: float = 0.0
+
+    partial_exits: list[PartialExit] = Field(default_factory=list)
+
+
+class LifecycleConfig(BaseModel):
+    """Tunables for position-management decisions."""
+
+    decision_mode: Literal["rule", "llm", "hybrid", "hybrid_audit"] = "rule"
+
+    # Hard exits (always evaluated, even in llm/hybrid)
+    stop_loss_pct: float = -0.30
+    max_hold_seconds: float = 3600.0
+    trailing_drawdown_pct: float = 0.50
+    trailing_arms_at_pnl_pct: float = 0.20
+
+    # TP ladder: list of (pnl_threshold, fraction_of_current_size_to_sell)
+    # Default: at +50% sell half (recoup initials), at +100% sell half of
+    # remainder, at +300% sell everything.
+    tp_ladder: list[tuple[float, float]] = Field(
+        default_factory=lambda: [(0.5, 0.5), (1.0, 0.5), (3.0, 1.0)]
+    )
+
+    # Safety
+    min_sell_size: float = 0.0
+
+
+@dataclass
+class PositionContext:
+    """What the bot hands `build_lifecycle(...)` per tick."""
+
+    token: TokenInput
+    position: PositionState
+    config: LifecycleConfig = field(default_factory=LifecycleConfig)
+
+
+class LifecycleVerdict(BaseModel):
+    """Structured LLM output for lifecycle decider.
+
+    Note: ``stop_loss`` is intentionally NOT in the action set — that's a
+    deterministic-only action fired by the rule gate. The LLM operates
+    inside the envelope where hard exits have already been checked.
+    """
+
+    action: Literal["hold", "take_profit", "scale_out", "exit_full"]
+    size_pct: float = Field(ge=0, le=1, description="fraction of CURRENT position to sell")
+    confidence: float = Field(ge=0, le=1)
     reasoning: str = ""
     concerns: list[str] = Field(default_factory=list)

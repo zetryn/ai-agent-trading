@@ -5,6 +5,47 @@ All notable changes to `zetryn-trading` will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] — 2026-06-27
+
+PL1 ships: the first **position-management agent**. Up to v0.12 every
+shipped agent decided entry; nothing helped with the open position. PL1
+fills that gap with a recommendation-only TP / SL / scale-out / trailing
+graph that consumes `PositionContext` and emits a sell `Decision`.
+
+### Added
+- **`build_lifecycle(...)`** in `strategies.agents.lifecycle` — compiled
+  graph with four modes (`rule` / `llm` / `hybrid` / `hybrid_audit`).
+  Reflective loop wired into `llm` / `hybrid` when a `decision_log` is
+  provided; intentionally skipped in `hybrid_audit` to preserve the
+  sub-ms sync path.
+- **New schemas in `trading/schemas.py`**: `PartialExit`, `PositionState`,
+  `LifecycleConfig`, `PositionContext`, `LifecycleVerdict`. `Decision.action`
+  extended with `hold`, `take_profit`, `scale_out`, `exit_full`.
+- **`strategies/nodes/lifecycle_nodes.py`** — 5 rule gates
+  (`emergency_exit`, `hard_stop_loss`, `time_stop`, `trailing_stop`,
+  `tp_ladder`) + `rule_hold` fall-through + `lifecycle_prompt` /
+  `lifecycle_guardrail` / `make_audit_dispatch` for the LLM paths.
+  Hard exits (emergency / SL / time) use a short-circuit Command to
+  bypass the LLM in llm/hybrid mode; soft exits (trailing / TP) fall
+  through so audit_dispatch can still pick them up in hybrid_audit.
+- **`examples/run_lifecycle.py`** — offline stub demo across 5 position
+  scenarios (FLAT / TP_RUNG_1 / MID_LADDER / HARD_SL / TRAILING).
+  Opt-in real Groq via `ZETRYN_LIFECYCLE_USE_GROQ=1`.
+- **Tests** — `test_lifecycle_nodes.py` (13), `test_lifecycle_agent.py`
+  (10), `test_lifecycle_reflective.py` (6). All 312 tests pass, ruff
+  clean.
+
+### Design notes
+- **Hard exits are rule-only, always.** Unlike entry agents, the LLM
+  cannot override emergency / hard SL / time stop. Cost of being wrong
+  on an open position is far higher than on entry.
+- **Framework holds no position state.** Bot pushes a complete
+  `PositionState` snapshot per tick (`partial_exits` tracking ladder
+  rungs the bot has already executed). Boundary-identical to entry agents.
+- **Position management is NOT a strategy.** Tracked in CAPABILITIES.md
+  roadmap as PL1, NOT in `docs/STRATEGIES.md` (which catalogs alpha-
+  generating entry strategies). See STRATEGIES.md §Notes.
+
 ## [0.12.0] — 2026-06-27
 
 Strategy #4 ships: the Pump.fun graduation snipe agent. Same shape as the

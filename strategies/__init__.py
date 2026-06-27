@@ -7,6 +7,7 @@ demonstrate and test the framework against the ``trading`` contract.
 
 from .agents.graduation import build_graduation
 from .agents.kol_copytrade import build_kol_copytrade
+from .agents.lifecycle import build_lifecycle
 from .agents.scanner import build_scanner
 from .agents.sniper import build_sniper
 from .kol_registry import KOLRegistry
@@ -18,6 +19,7 @@ __all__ = [
     "SampleProvider",
     "build_graduation",
     "build_kol_copytrade",
+    "build_lifecycle",
     "build_scanner",
     "build_sniper",
 ]

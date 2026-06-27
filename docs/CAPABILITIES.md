@@ -287,7 +287,8 @@ table on every release** — README and plan docs link here instead of duplicati
 | **A1 — Organic Growth Detector** (A-tier triage) | **Time-series chart-pattern recognizer** — classifies post-launch time-series as organic/suspicious/manipulated. `build_organic_detector(...)` with 4 modes; 2 hard gates (`observation_gate`, `manipulation_gate`) + 5-dim scorer (`organic_classify`). `organic→buy`, `suspicious→skip`, `manipulated→abort`; `flags["classification"]` + `scores["organic_score"]`. New schemas: `GrowthSnapshot`, `GrowthConfig`, `GrowthContext`, `GrowthVerdict`. audit fires for ALL classifications (not just buys). See [STRATEGIES.md](STRATEGIES.md#a-tier--validated-narrower-constraints). | ✅ done | v0.16.0 |
 | M11 | Phase 2 LLM strategy — parallel specialist nodes (paid providers) | 📅 later | — |
 | M12 | Phase 3 LLM strategy — Zetryn model mapping (Easfus/Medifus/Hardes) | 📅 platform-dependent | — |
-| M13+ | YAML loader, multi-agent panel (mixed roles, Anthropic-style), vector memory | 📅 earned later | — |
+| **M13 — YAML Loader** | `zetryn.config.load_graph(path, registry=...)` — declarative graph specs in YAML. Mini boolean DSL for `when:` (ast-whitelisted, no eval), `module:attr` references, `${name}` placeholders for live objects, eager validation. Supports `rule` / `llm` / `llm_decision` node types in v1. CLI: `python -m zetryn.config <file>`. See [plans/2026-06-27-yaml-loader-m13.md](plans/2026-06-27-yaml-loader-m13.md). | ✅ done | v0.17.0 |
+| M14+ | Multi-agent panel (mixed roles, Anthropic-style), vector memory, ReflectiveNode-in-YAML | 📅 earned later | — |
 
 **Platform workstream** (separate process, not gating the framework):
 P1 `RemoteSubscriptionAuth` + hosted vLLM · P2 billing + multi-tenant ·

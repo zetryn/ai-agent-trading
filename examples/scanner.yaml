@@ -1,0 +1,40 @@
+# Minimal scanner-style graph in YAML form.
+#
+# Runnable with: python examples/run_yaml_scanner.py
+#
+# Demonstrates:
+#   - rule nodes (resolved via module:attr references)
+#   - declarative edges with a boolean DSL `when:` condition
+#   - END sentinel as terminal target
+#
+# The bot supplies the live LLM client / knowledge pack via load_graph(
+# registry=...). This example uses only rule nodes so it runs offline
+# without any provider key.
+
+name: yaml_scanner_demo
+entry: safety_gate
+
+nodes:
+  - name: safety_gate
+    type: rule
+    fn: examples.run_yaml_scanner:safety_gate
+
+  - name: market_gate
+    type: rule
+    fn: examples.run_yaml_scanner:market_gate
+
+  - name: decide_buy
+    type: rule
+    fn: examples.run_yaml_scanner:decide_buy
+
+  - name: decide_skip
+    type: rule
+    fn: examples.run_yaml_scanner:decide_skip
+
+edges:
+  - {from: safety_gate, to: decide_skip, when: "not scratch.safety_ok"}
+  - {from: safety_gate, to: market_gate, when: "scratch.safety_ok"}
+  - {from: market_gate, to: decide_buy,  when: "scratch.market_ok and scratch.score >= 0.6"}
+  - {from: market_gate, to: decide_skip}
+  - {from: decide_buy,  to: END}
+  - {from: decide_skip, to: END}

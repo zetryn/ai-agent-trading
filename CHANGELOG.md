@@ -5,6 +5,43 @@ All notable changes to `zetryn-trading` will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0] — 2026-06-27
+
+M13 ships: **YAML graph loader**. Declarative graph specs — load a strategy
+from a single YAML file, no Python builder required. Existing Python
+builders (`build_scanner`, `build_sniper`, etc.) are unchanged; the loader
+is purely additive.
+
+### Added
+- **`zetryn.config.load_graph(path, *, registry=None) -> Graph`** —
+  parses, validates, and compiles a YAML spec eagerly. Every
+  `module:attr` reference must import, every `${name}` placeholder must
+  be in the supplied registry, every edge must point at a known node, and
+  every `when:` expression must parse. Validation failures raise
+  `ConfigError` with the YAML path + offending location.
+- **Mini boolean DSL** for edge `when:` conditions — subset of Python
+  (dotted attribute access on `scratch`/`context`/`output`, comparisons,
+  `and`/`or`/`not`, literals). Parsed via `ast.parse` with a strict
+  node whitelist; **no `eval()` at runtime**. Function calls, indexing,
+  arithmetic, and `is`/`in` are rejected by design — push complex logic
+  into `RuleNode` instead.
+- **Three node types** supported in v1: `rule`, `llm`, `llm_decision`.
+  `ReflectiveNode`, `AgentNode`, and tool-use loops stay Python-only for
+  now (will be added as M13.1 if real usage demands it).
+- **CLI validator** — `python -m zetryn.config <file.yaml>` returns
+  exit 0 on a valid spec, 1 with a detailed `ConfigError` otherwise.
+- **Example**: `examples/scanner.yaml` + `examples/run_yaml_scanner.py`
+  — offline demo, no provider key required.
+
+### Dependencies
+- Added `pyyaml>=6.0` to `[project.dependencies]`.
+
+### Design
+- Brainstormed decisions documented in
+  [docs/plans/2026-06-27-yaml-loader-m13.md](docs/plans/2026-06-27-yaml-loader-m13.md).
+- Boundary preserved: framework never instantiates LLM clients; YAML can
+  only *reference* objects the caller passed in via `registry=`.
+
 ## [0.16.0] — 2026-06-27
 
 A1 ships: **Organic Growth Detector** — first A-tier strategy. A triage

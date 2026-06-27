@@ -70,8 +70,8 @@
     "semantic_hash": ""
   },
   "/mnt/data/Project/zetryn/ai-agent/strategies/__init__.py": {
-    "mtime": 1782539777.7686658,
-    "ast_hash": "50fca596d8229c8fe1312f27a6c0b988",
+    "mtime": 1782543295.6714425,
+    "ast_hash": "bbfedcac6a1be06aaa210b5de90d9f38",
     "semantic_hash": ""
   },
   "/mnt/data/Project/zetryn/ai-agent/strategies/agents/__init__.py": {
@@ -320,13 +320,13 @@
     "semantic_hash": ""
   },
   "/mnt/data/Project/zetryn/ai-agent/trading/__init__.py": {
-    "mtime": 1782539620.3534298,
-    "ast_hash": "c011c336619ff9a7dc90edc14b89388c",
+    "mtime": 1782543178.1832516,
+    "ast_hash": "22ef676675b16f7af80b8b32d8aceb3d",
     "semantic_hash": ""
   },
   "/mnt/data/Project/zetryn/ai-agent/trading/schemas.py": {
-    "mtime": 1782539604.4167325,
-    "ast_hash": "e71c43f6eec22b5d343008dd4ded0797",
+    "mtime": 1782543652.7057166,
+    "ast_hash": "db7b571b84ff7c96738bad003dc49dcf",
     "semantic_hash": ""
   },
   "/mnt/data/Project/zetryn/ai-agent/zetryn/__init__.py": {
@@ -510,8 +510,8 @@
     "semantic_hash": ""
   },
   "/mnt/data/Project/zetryn/ai-agent/CHANGELOG.md": {
-    "mtime": 1782539964.2378128,
-    "ast_hash": "e915af98fa72025453ec2bcda256d07a",
+    "mtime": 1782543582.0701003,
+    "ast_hash": "a304dc338c8508e4e7c0061b3a8b69e7",
     "semantic_hash": ""
   },
   "/mnt/data/Project/zetryn/ai-agent/CLAUDE.md": {
@@ -520,18 +520,18 @@
     "semantic_hash": ""
   },
   "/mnt/data/Project/zetryn/ai-agent/README.md": {
-    "mtime": 1782497333.0615482,
-    "ast_hash": "f86175f190f54509affe8f09749064e4",
+    "mtime": 1782545671.7519085,
+    "ast_hash": "57d8f49851520c5f5e8b371fba3640a8",
     "semantic_hash": ""
   },
   "/mnt/data/Project/zetryn/ai-agent/docs/CAPABILITIES.md": {
-    "mtime": 1782539980.3425832,
-    "ast_hash": "b8b6723a135b5e0a3389b8146f77dd17",
+    "mtime": 1782543559.8789039,
+    "ast_hash": "cedf72d4169c413fb2e0530b67732e33",
     "semantic_hash": ""
   },
   "/mnt/data/Project/zetryn/ai-agent/docs/STRATEGIES.md": {
-    "mtime": 1782539986.91949,
-    "ast_hash": "454e57d7f4220aeb04eae57fc5a9e5b4",
+    "mtime": 1782543605.6373074,
+    "ast_hash": "1a0c7e480b684775d6ad7fc630c677a8",
     "semantic_hash": ""
   },
   "/mnt/data/Project/zetryn/ai-agent/docs/maintenance-log.md": {
@@ -565,8 +565,8 @@
     "semantic_hash": ""
   },
   "/mnt/data/Project/zetryn/ai-agent/docs/plans/README.md": {
-    "mtime": 1782539992.9814045,
-    "ast_hash": "c81e230c3500ab29a787ffe6d4021be2",
+    "mtime": 1782543595.4482179,
+    "ast_hash": "d3899e58c806cdac228932917e98a916",
     "semantic_hash": ""
   },
   "/mnt/data/Project/zetryn/ai-agent/examples/run_confluence.py": {
@@ -602,6 +602,71 @@
   "/mnt/data/Project/zetryn/ai-agent/docs/plans/2026-06-27-smart-money-confluence.md": {
     "mtime": 1782539567.352455,
     "ast_hash": "ee168083659349f8b3fd20ab6860b7af",
+    "semantic_hash": ""
+  },
+  "/mnt/data/Project/zetryn/ai-agent/examples/run_dip_buy.py": {
+    "mtime": 1782542014.133914,
+    "ast_hash": "2c468a8a417682169dec0dc5147de279",
+    "semantic_hash": ""
+  },
+  "/mnt/data/Project/zetryn/ai-agent/strategies/agents/dip_buy.py": {
+    "mtime": 1782541898.9803586,
+    "ast_hash": "f282ca076f9cd154c8854f643f6d11bb",
+    "semantic_hash": ""
+  },
+  "/mnt/data/Project/zetryn/ai-agent/strategies/nodes/dip_buy_nodes.py": {
+    "mtime": 1782541863.8847945,
+    "ast_hash": "8e75b80dbe099d067039c3c9358e848d",
+    "semantic_hash": ""
+  },
+  "/mnt/data/Project/zetryn/ai-agent/tests/test_dip_buy_agent.py": {
+    "mtime": 1782541978.3375857,
+    "ast_hash": "9f44eb98dd0a529d042e05f1405b9c13",
+    "semantic_hash": ""
+  },
+  "/mnt/data/Project/zetryn/ai-agent/tests/test_dip_buy_nodes.py": {
+    "mtime": 1782541947.8793952,
+    "ast_hash": "c505dd5717c5a50d49cef156f8639795",
+    "semantic_hash": ""
+  },
+  "/mnt/data/Project/zetryn/ai-agent/docs/plans/2026-06-27-early-stage-dip-buy.md": {
+    "mtime": 1782541723.271531,
+    "ast_hash": "d0aa863c4e7c122b6101118bca591ebc",
+    "semantic_hash": ""
+  },
+  "/mnt/data/Project/zetryn/ai-agent/examples/run_growth_detector.py": {
+    "mtime": 1782543543.3147566,
+    "ast_hash": "a621f02e1d802ba1d10e019d708f685a",
+    "semantic_hash": ""
+  },
+  "/mnt/data/Project/zetryn/ai-agent/strategies/agents/growth_detector.py": {
+    "mtime": 1782543284.170329,
+    "ast_hash": "0cd434caa20e7e96fc90b365685b0862",
+    "semantic_hash": ""
+  },
+  "/mnt/data/Project/zetryn/ai-agent/strategies/nodes/growth_nodes.py": {
+    "mtime": 1782543736.0844293,
+    "ast_hash": "c6e990ef47cd5e388c467bf92ca2d966",
+    "semantic_hash": ""
+  },
+  "/mnt/data/Project/zetryn/ai-agent/tests/test_growth_agent.py": {
+    "mtime": 1782543516.370515,
+    "ast_hash": "13284e5193da8f3e6a5bf3b98c029f88",
+    "semantic_hash": ""
+  },
+  "/mnt/data/Project/zetryn/ai-agent/tests/test_growth_nodes.py": {
+    "mtime": 1782543749.2095401,
+    "ast_hash": "93e6998664827a79ca41cc366e0259ff",
+    "semantic_hash": ""
+  },
+  "/mnt/data/Project/zetryn/ai-agent/docs/plans/2026-06-27-organic-growth-detector.md": {
+    "mtime": 1782543121.5146494,
+    "ast_hash": "d4131f62d90a57218c8ae39f893b0f44",
+    "semantic_hash": ""
+  },
+  "/mnt/data/Project/zetryn/ai-agent/docs/GUIDE.md": {
+    "mtime": 1782545659.4472423,
+    "ast_hash": "7f954f3e896326ee5ea9f03a8d361937",
     "semantic_hash": ""
   }
 }

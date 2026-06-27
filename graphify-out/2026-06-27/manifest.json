@@ -520,8 +520,8 @@
     "semantic_hash": ""
   },
   "/mnt/data/Project/zetryn/ai-agent/README.md": {
-    "mtime": 1782497333.0615482,
-    "ast_hash": "f86175f190f54509affe8f09749064e4",
+    "mtime": 1782545671.7519085,
+    "ast_hash": "57d8f49851520c5f5e8b371fba3640a8",
     "semantic_hash": ""
   },
   "/mnt/data/Project/zetryn/ai-agent/docs/CAPABILITIES.md": {
@@ -662,6 +662,11 @@
   "/mnt/data/Project/zetryn/ai-agent/docs/plans/2026-06-27-organic-growth-detector.md": {
     "mtime": 1782543121.5146494,
     "ast_hash": "d4131f62d90a57218c8ae39f893b0f44",
+    "semantic_hash": ""
+  },
+  "/mnt/data/Project/zetryn/ai-agent/docs/GUIDE.md": {
+    "mtime": 1782545659.4472423,
+    "ast_hash": "7f954f3e896326ee5ea9f03a8d361937",
     "semantic_hash": ""
   }
 }

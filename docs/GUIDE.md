@@ -16,6 +16,7 @@ understand how an agent makes decisions.
 6. [Memory & Reflective Loop](#6-memory--reflective-loop)
 7. [Agent Reference](#7-agent-reference)
 8. [Backtesting](#8-backtesting)
+9. [Bot Integration](#9-bot-integration)
 
 ---
 
@@ -739,3 +740,69 @@ print(result.avg_confidence)  # mean confidence across all decisions
 
 Test, backtest, and live use the same compiled graph. Swap the
 `DataProvider` or `TokenInput` source — the agent is unchanged.
+
+---
+
+## 9. Bot Integration
+
+How your bot feeds data to the agent, and how to keep the framework fast
+when the surrounding pipeline isn't.
+
+### Push vs pull
+
+Zetryn supports both data-ingress patterns:
+
+- **Push** (recommended for production): the bot fetches data, builds
+  `TokenInput`, and calls
+  `agent.run(State(context=TradingContext(token=token_input)))`. Latency
+  is predictable because the agent never reaches out — every external
+  call happened in your code, on your terms.
+- **Pull**: the bot implements the `DataProvider` protocol and the agent
+  calls `provider.fetch(mint)`. Useful for backtests with
+  `HistoricalDataProvider`, or for testing with `MockDataProvider`.
+
+Test, backtest, and live use the **same compiled graph** — only the
+provider (or where the `TokenInput` came from) changes.
+
+### Pre-filter at the bot
+
+Zetryn is cheap to run, but **filling `TokenInput` is not** — Helius,
+GMGN, Twitter, DexScreener, BirdEye all cost API quota and latency.
+Pre-filter at the bot so the agent only sees candidates worth a deep
+look.
+
+```python
+def worth_fetching(ws_event) -> bool:
+    return (
+        ws_event.liquidity_usd >= 3_000
+        and 30 <= ws_event.age_seconds <= 3600
+        and ws_event.mint not in blacklist
+        and ws_event.creator not in known_ruggers
+    )
+```
+
+Typical funnel: 10,000 tokens/min from a Pump.fun WebSocket → ~50
+candidates/min after pre-filter → fully enriched and pushed to the
+agent. The agent's job is the **last mile** (decision), not discovery.
+
+If the bot can answer "is this even plausibly tradable?" in under 1 ms
+with rules, do it there. The agent should only see candidates the bot
+already believes warrant the LLM call.
+
+### What Zetryn owns vs what the bot owns
+
+The boundary is non-negotiable. Mixing these up is the #1 source of
+confusion when integrating Zetryn for the first time.
+
+| Zetryn (framework) | Bot (caller) |
+|---|---|
+| Graph orchestration | RPC, wallet, signing |
+| LLM calls (advisor / analyst / decider) | Hot loop, mempool watching |
+| Scoring, decision aggregation | Trade execution, slippage, MEV |
+| Memory (blacklist, decision log) | Position tracking, PnL |
+| Observability (trace, hooks) | Pre-filter, fetch budgeting |
+| Backtest harness | Live market data feeds |
+
+**Zetryn decides, the bot executes.** Never the reverse. If you find
+yourself adding a fetcher inside `zetryn/`, stop — it belongs in your
+bot.

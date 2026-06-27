@@ -311,11 +311,15 @@ zetryn-trading/
 │   ├── observability/   ← structured logging, hooks, trace serialization
 │   ├── auth/            ← SubscriptionAuth, License (Zetryn platform seam)
 │   └── backtest/        ← generic Backtester
-├── trading/             ← shared contract (TokenInput, Decision, FullAnalysis, ...)
+├── trading/             ← shared contract (TokenInput, Decision, FullAnalysis,
+│                           GrowthSnapshot, DipBuySnapshot, ConfluenceEvent, ...)
 └── strategies/          ← reference agents (move to your bot repo for production)
-    ├── nodes/           ← analyst.py, decide.py, filters.py, sniper_nodes.py,
-    │                       kol_nodes.py
-    └── agents/          ← scanner.py, sniper.py, kol_copytrade.py
+    ├── nodes/           ← filters.py, analyst.py, decide.py, sniper_nodes.py,
+    │                       kol_nodes.py, graduation_nodes.py, lifecycle_nodes.py,
+    │                       confluence_nodes.py, dip_buy_nodes.py, growth_nodes.py
+    └── agents/          ← scanner.py, sniper.py, kol_copytrade.py,
+                            graduation.py, lifecycle.py, confluence.py,
+                            dip_buy.py, growth_detector.py
 ```
 
 **Dependency rule (strict):**
@@ -381,30 +385,33 @@ reverse.
 
 ## Status
 
-**Maturity:** Alpha (v0.11.0) — actively developed, breaking changes possible
+**Maturity:** Alpha (v0.16.0) — actively developed, breaking changes possible
 between 0.x releases until the API stabilises.
 
 **Single source of truth for roadmap & milestone status:**
 [`docs/CAPABILITIES.md`](docs/CAPABILITIES.md) §6. The summary below is just
 a snapshot — the table over there is what gets updated on every release.
 
-What's built (v0.11.0):
+What's built (v0.16.0):
 
 - Core engine, LLM layer, tools, memory, observability, auth seam, backtest
-- **Three reference strategies — all sharing a consistent learning-loop shape:**
+- **Nine reference strategy agents — all sharing a consistent four-mode shape:**
 
-  | Strategy | Modes | Reflective loop |
-  |---|---|---|
-  | **Scanner** | AI-first (single LLM call) | ✅ `build_scanner(..., decision_log=...)` |
-  | **Sniper** | `rule` / `llm` / `hybrid` / `hybrid_audit` | ✅ `build_sniper(..., decision_log=...)` — wired in `llm`/`hybrid`; skipped in `hybrid_audit` to preserve sub-ms path |
-  | **KOL Copy-Trade** | `rule` / `confirmed` / `audit` | ✅ `build_kol_copytrade(..., decision_log=...)` — wired in `confirmed`; skipped in `audit` |
+  | Agent | Strategy | Modes | Builder |
+  |---|---|---|---|
+  | Scanner | AI-first discovery | `analyst` (single LLM call) | `build_scanner` |
+  | Sniper | Sub-ms launch entry | `rule` / `llm` / `hybrid` / `hybrid_audit` | `build_sniper` |
+  | KOL Copy-Trade | Copy pre-vetted KOL wallets | `rule` / `confirmed` / `audit` | `build_kol_copytrade` |
+  | Graduation Snipe | Pump.fun → Raydium migration entry | `rule` / `llm` / `hybrid` / `hybrid_audit` | `build_graduation` |
+  | **Position Lifecycle** | Hold / TP / scale-out / emergency exit | `rule` / `llm` / `hybrid` / `hybrid_audit` | `build_lifecycle` |
+  | **Smart Money Confluence** | ≥N pre-vetted wallets accumulate same token | `rule` / `llm` / `hybrid` / `hybrid_audit` | `build_confluence` |
+  | **Early-Stage Dip Buy** | Post-dump recovery entry (launch or graduation) | `rule` / `llm` / `hybrid` / `hybrid_audit` | `build_dip_buy` |
+  | **Organic Growth Detector** | Post-launch chart-pattern triage filter | `rule` / `llm` / `hybrid` / `hybrid_audit` | `build_organic_detector` |
 
-  All three strategies expose the same `decision_log` + `reflect_window` +
+  All agents expose the same `decision_log` + `reflect_window` +
   `reflect_feature_keys` + `reflect_top_k` parameters. Passing a `DecisionLog`
   inserts a `ReflectiveNode` before the LLM call — the analyst sees a
-  `LESSONS from recent outcomes` system block compiled from real historical
-  losses. No `decision_log` → behaviour is identical to prior releases
-  (backwards-compatible).
+  `LESSONS from recent outcomes` block compiled from real historical losses.
 
 - Pre-P1 foundations: `KnowledgePack`, `LLMRouter` (multi-provider failover
   + per-model throttle), `ReflectiveNode`

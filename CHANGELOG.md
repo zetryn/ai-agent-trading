@@ -5,6 +5,85 @@ All notable changes to `zetryn-trading` will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] — 2026-06-28
+
+**Wheel now ships reference implementations.** From this release the
+PyPI wheel includes `trading/` (data contracts) and `strategies/`
+(reference agent factories) alongside the `zetryn/` engine. Users can
+now `pip install zetryn-trading` and import everything they need to
+run a Solana memecoin bot end-to-end, without porting reference code
+into their own repo first.
+
+### Added to the wheel
+
+- **`trading/schemas.py`** — all data contracts the framework defines.
+  `TokenInput`, `Decision`, `TradingContext` plus every per-strategy
+  `*Context` / `*Verdict` / `*Config` schema (`KOLContext`,
+  `KOLProfile`, `KOLAnalystVerdict`, `GraduationEvent`,
+  `GraduationConfig`, `GraduationContext`, `GraduationVerdict`,
+  `PartialExit`, `PositionState`, `LifecycleConfig`, `PositionContext`,
+  `LifecycleVerdict`, `SmartWalletProfile`, `SmartWalletAccumulation`,
+  `ConfluenceEvent`, `ConfluenceConfig`, `ConfluenceContext`,
+  `ConfluenceVerdict`, `DipBuySnapshot`, `DipBuyConfig`,
+  `DipBuyContext`, `DipBuyVerdict`, `GrowthSnapshot`, `GrowthConfig`,
+  `GrowthContext`, `GrowthVerdict`, `MarketData`, `HolderData`,
+  `ContractData`, `SocialData`, `ActivityData`, `WalletIntel`,
+  `PumpfunData`).
+- **`strategies/agents/*.py`** — 8 reference agent factories:
+  `build_scanner`, `build_sniper`, `build_kol_copytrade`,
+  `build_graduation`, `build_lifecycle`, `build_confluence`,
+  `build_dip_buy`, `build_organic_detector`.
+- **`strategies/nodes/*.py`** — every rule / analyst / decide node the
+  reference agents wire up (`filters`, `analyst`, `decide`,
+  `sniper_nodes`, `kol_nodes`, `graduation_nodes`, `lifecycle_nodes`,
+  `confluence_nodes`, `dip_buy_nodes`, `growth_nodes`, `prompts`).
+- **`strategies/providers.py`**, **`strategies/kol_registry.py`**,
+  **`strategies/smart_wallet_registry.py`**, **`strategies/backtest.py`**.
+
+### Changed
+
+- **`[tool.hatch.build.targets.wheel] packages`** —
+  `["zetryn"]` → `["zetryn", "trading", "strategies"]`. This is the
+  only substantive change vs v1.0.0; the runtime code is otherwise
+  identical.
+- **`CLAUDE.md` §Architecture§Dependency rules** — clarified that the
+  wheel scope is broader than the dependency rule. The dependency rule
+  is non-negotiable (no I/O inside the framework wheel); the wheel
+  scope is a packaging decision and is allowed to include domain
+  reference code as long as that code holds no I/O.
+
+### Rationale
+
+The v1.0.0 design intent was that `strategies/` would be "ported" into
+the bot repo. That kept the wheel lean and the engine domain-neutral
+but created real friction: a user installing `zetryn-trading` could
+import the graph engine but not the `Decision` schema they needed to
+consume the framework's output. The boundary the framework cares about
+(no I/O in the wheel) was never broken by bundling reference code —
+schemas and node/edge factories are pure code that touches nothing
+external.
+
+Industry precedent: every domain-branded framework (Django, LangChain,
+Rails, HuggingFace) ships reference implementations alongside the
+engine. `zetryn-trading` follows the same pattern from v1.1.0.
+
+### Migration from v1.0.0
+
+None. `from zetryn.core import ...` etc. keeps working unchanged.
+What was already on PyPI in v1.0.0 is still on PyPI; v1.1.0 only
+adds. Users who had been porting `trading/` and `strategies/` into
+their own repo can switch to `pip install zetryn-trading>=1.1.0`
+and import directly — but the ported copy keeps working too if they
+prefer to maintain a fork.
+
+### Notes for downstream
+
+- `zetryn-ai/bot` M2 design (wiring scanners into a framework agent)
+  is unblocked: the bot will depend on `zetryn-trading>=1.1.0` and
+  import `from trading.schemas import TokenInput` /
+  `from strategies.agents.scanner import build_scanner` directly. No
+  porting step needed.
+
 ## [1.0.0] — 2026-06-27
 
 **First stable release.** Public API is now frozen across v1.x — any

@@ -123,7 +123,18 @@ trading/  ← no imports from zetryn/ or strategies/  (pure contract/schemas)
 strategies/ ← imports both zetryn/ and trading/
 ```
 
-Only `zetryn/` is packaged into the wheel. `strategies/` is the proving ground (demo + tests).
+**Wheel scope (v1.1.0 onwards):** `zetryn`, `trading`, and `strategies`
+all ship in the PyPI wheel. Users can `from trading.schemas import
+Decision` and `from strategies.agents.scanner import build_scanner`
+straight out of `pip install zetryn-trading`. Prior to v1.1.0 only
+`zetryn/` was bundled and the reference code had to be ported into the
+bot repo — that created friction without serving the dependency rules
+(which only require no I/O inside the wheel, not no domain code).
+
+The dependency rules above remain non-negotiable. The wheel can carry
+reference assemblies because they are **pure code** (schemas +
+node/edge factories) — they invoke no network and hold no keys. The
+"no I/O inside the framework" boundary lives in code, not in packaging.
 
 ### Core engine (`zetryn/core/`)
 

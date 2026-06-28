@@ -9,7 +9,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "zetryn-trading"
-version = "1.0.0"
+version = "1.1.0"
 description = "AI Agent Trading from Zetryn AI. Graph-based agents for Solana memecoin trading: scanner + sniper, with structured LLM reasoning."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -63,7 +63,15 @@ Issues = "https://github.com/zetryn/zetryn-trading/issues"
 Changelog = "https://github.com/zetryn/zetryn-trading/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
-packages = ["zetryn"]
+# v1.1.0 onwards ships `trading/` (data contracts: TokenInput, Decision,
+# all *Context / *Verdict schemas) and `strategies/` (8 reference
+# build_*() agent factories) alongside the `zetryn/` engine. Until v1.0.0
+# the wheel was engine-only and users had to port the reference code
+# into their bot — that created friction. The wheel scope here matches
+# the package's branding (`zetryn-trading`, trading-domain) and unblocks
+# `from trading.schemas import Decision` and `from strategies.agents.
+# scanner import build_scanner` directly out of `pip install`.
+packages = ["zetryn", "trading", "strategies"]
 
 [tool.hatch.build.targets.sdist]
 # Include the trading contract + strategies as reference, but only `zetryn`
